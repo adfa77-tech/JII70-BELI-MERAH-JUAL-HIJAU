@@ -57,14 +57,12 @@ st.markdown("""
         }
     }
 
-    /* Fallback Universal Class untuk Kartu */
     .glass-card {
         border-radius: 18px;
         padding: 20px;
         margin-bottom: 16px;
     }
 
-    /* Header Banner Utama dengan Border Artistik & Teks Putih */
     .header-box {
         background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #0d9488 100%);
         color: #ffffff !important;
@@ -82,7 +80,6 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* Navigasi Tab Atas */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         padding: 8px;
@@ -142,36 +139,46 @@ def get_wib_time():
     hari = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"][now.weekday()]
     return f"{hari}, {now.strftime('%d-%m-%Y | %H:%M:%S')} WIB"
 
-# --- MESIN ANALISIS KUANTITATIF & TEKNIKAL AKURAT (6 BULAN) ---
-@st.cache_data(ttl=300)
+# --- MESIN ANALISIS REAL-TIME DENGAN TIKER INDIVIDUAL ---
+@st.cache_data(ttl=120)
 def fetch_and_analyze_market(tickers):
+    # Ambil data real-time IHSG (^JKSE)
     try:
-        ihsg = yf.download("^JKSE", period="6m", interval="1d", progress=False)
-        if isinstance(ihsg.columns, pd.MultiIndex):
-            ihsg.columns = ihsg.columns.get_level_values(0)
-        ihsg_ret = (ihsg['Close'].iloc[-1] / ihsg['Close'].iloc[0] - 1) * 100 if len(ihsg) >= 20 else 0
+        ihsg_obj = yf.Ticker("^JKSE")
+        ihsg_hist = ihsg_obj.history(period="6m", interval="1d")
+        if isinstance(ihsg_hist.columns, pd.MultiIndex):
+            ihsg_hist.columns = ihsg_hist.columns.get_level_values(0)
+        
+        # Ambil harga terkini via fast_info jika memungkinkan
+        ihsg_last = float(ihsg_obj.fast_info.get('last_price', ihsg_hist['Close'].iloc[-1]))
+        ihsg_prev = float(ihsg_hist['Close'].iloc[-2]) if len(ihsg_hist) > 1 else ihsg_last
+        ihsg_ret = (ihsg_hist['Close'].iloc[-1] / ihsg_hist['Close'].iloc[0] - 1) * 100 if len(ihsg_hist) >= 20 else 0
     except Exception:
-        ihsg = pd.DataFrame({'Close': [7000, 7000]})
+        ihsg_hist = pd.DataFrame({'Close': [5300, 5300]})
+        ihsg_last = 5300.0
+        ihsg_prev = 5300.0
         ihsg_ret = 0
 
     results = []
     for t in tickers:
         try:
-            df = yf.download(t, period="6m", interval="1d", progress=False)
+            tk = yf.Ticker(t)
+            df = tk.history(period="6m", interval="1d")
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df = df.dropna()
             if len(df) < 30:
                 continue
 
+            # Harga real-time terkini
+            curr_price = float(tk.fast_info.get('last_price', df['Close'].iloc[-1]))
+            prev_price = float(df['Close'].iloc[-2]) if len(df) > 1 else curr_price
+            chg_pct = ((curr_price - prev_price) / prev_price) * 100
+
             close = df['Close']
             high = df['High']
             low = df['Low']
             volume = df['Volume']
-
-            curr_price = float(close.iloc[-1])
-            prev_price = float(close.iloc[-2])
-            chg_pct = ((curr_price - prev_price) / prev_price) * 100
 
             ema9 = float(close.ewm(span=9, adjust=False).mean().iloc[-1])
             ma20 = float(close.rolling(20).mean().iloc[-1])
@@ -194,42 +201,35 @@ def fetch_and_analyze_market(tickers):
             support_20 = float(low.tail(20).min())
             resist_20 = float(high.tail(20).max())
 
-            # --- RUMUS STRATEGI DISEMPURNAKAN (MEMASTIKAN SINYAL MUNCUL DINAMIS) ---
+            # --- RUMUS STRATEGI DISEMPURNAKAN AGAR REKOMENDASI AKTIF ---
             sinyal = "WAIT / PANTAU"
             strategi = "Konsolidasi Sehat"
             alasan = []
             waktu_eksekusi = "Pantau saat pembukaan atau sesi sore (15:30 WIB)"
 
-            # 1. Buy on Weakness (Saham Merah / Koreksi di Uptrend / Dekat Support)
-            if chg_pct < 0 and curr_price >= (ma50 * 0.93) and rs_score >= 45:
+            if chg_pct < 0 and curr_price >= (ma50 * 0.90) and rs_score >= 35:
                 sinyal = "STRONG BUY (BOW)"
                 strategi = "Buy on Weakness (Diskon Sehat di Support)"
-                alasan.append(f"Harga terkoreksi {chg_pct:.2f}% namun masih bertahan di dekat area rata-rata penting.")
-                alasan.append(f"RS Rating cukup kuat di angka {rs_score}.")
-                waktu_eksekusi = "Sesi 2 (14:30 - 15:50 WIB) saat harga melandai di support"
-
-            # 2. Strong Buy Breakout / Momentum
-            elif chg_pct > 0.8 and (vol_ratio > 1.1 or curr_price > ma20):
+                alasan.append(f"Harga terkoreksi {chg_pct:.2f}% namun bertahan di dekat support penting.")
+                alasan.append(f"RS Rating terjaga di angka {rs_score}.")
+                waktu_eksekusi = "Sesi 2 (14:30 - 15:50 WIB) saat harga melandai"
+            elif chg_pct > 0.5 or (curr_price > ma20 and rsi < 70):
                 sinyal = "STRONG BUY (MOMENTUM)"
                 strategi = "Breakout & Tren Kuat"
-                alasan.append(f"Harga menguat {chg_pct:.2f}% dengan dukungan volume dan momentum RSI {rsi:.1f}.")
+                alasan.append(f"Pergerakan harga positif {chg_pct:.2f}% dengan momentum RSI {rsi:.1f}.")
                 waktu_eksekusi = "Sesi 1 (09:30 - 11:00 WIB)"
-
-            # 3. Buy Swing / BSJP
             elif rsi < 65 and curr_price >= ma20:
                 sinyal = "BUY (SWING TRADING)"
                 strategi = "Swing Pendek / Pantulan MA20"
-                alasan.append("Harga berada di atas MA20 dengan RSI tidak jenuh beli.")
+                alasan.append("Harga berada di atas MA20 dengan indikator momentum sehat.")
                 waktu_eksekusi = "Menjelang penutupan sesi 2"
-
-            # 4. Sinyal Jual
-            elif rsi > 80 or (curr_price < ma20 and chg_pct < -2.0):
+            elif rsi > 80:
                 sinyal = "SELL / TAKE PROFIT"
-                strategi = "Amankan Profit / Cut Loss"
-                alasan.append(f"Indikator RSI jenuh beli ({rsi:.1f}) atau breakdown dari MA20.")
+                strategi = "Amankan Profit"
+                alasan.append(f"Indikator RSI jenuh beli ({rsi:.1f}).")
                 waktu_eksekusi = "Sesi pagi (09:00 - 09:30 WIB)"
             else:
-                alasan.append("Pergerakan harga konsolidasi wajar dalam rentang normal.")
+                alasan.append("Pergerakan harga dalam rentang normal.")
 
             buy_low = support_20 if "BOW" in sinyal else curr_price * 0.985
             buy_high = curr_price * 1.005
@@ -261,7 +261,7 @@ def fetch_and_analyze_market(tickers):
             continue
 
     df_res = pd.DataFrame(results)
-    return df_res, ihsg
+    return df_res, ihsg_hist, ihsg_last, ihsg_prev
 
 # --- FUNGSI GRAFIK CANDLESTICK 6 BULAN ---
 def plot_candlestick_6m(ticker, title_name):
@@ -339,7 +339,7 @@ with col_ref1:
         st.rerun()
 
 with st.spinner("Mengambil data real-time akurat dari Yahoo Finance..."):
-    df_screener, df_ihsg = fetch_and_analyze_market(JII70_TICKERS)
+    df_screener, df_ihsg, ihsg_last, ihsg_prev = fetch_and_analyze_market(JII70_TICKERS)
 
 # --- NAVIGASI UTAMA ---
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -366,10 +366,8 @@ with tab1:
     c2.metric("Sinyal Strong Buy", f"{strong_buy_cnt} Saham")
     c3.metric("Peluang Buy on Weakness", f"{bow_cnt} Saham")
     
-    ihsg_last = float(df_ihsg['Close'].iloc[-1]) if not df_ihsg.empty and 'Close' in df_ihsg.columns else 7000
-    ihsg_prev = float(df_ihsg['Close'].iloc[-2]) if not df_ihsg.empty and len(df_ihsg) > 1 and 'Close' in df_ihsg.columns else ihsg_last
     ihsg_chg = ((ihsg_last - ihsg_prev) / ihsg_prev) * 100 if ihsg_prev > 0 else 0
-    c4.metric("IHSG Terkini", fmt_id(ihsg_last), fmt_pct(ihsg_chg))
+    c4.metric("IHSG Terkini", f"{ihsg_last:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), fmt_pct(ihsg_chg))
     st.markdown('</div>', unsafe_allow_html=True)
 
     f_col1, f_col2, f_col3 = st.columns([2, 2, 2])
@@ -378,7 +376,7 @@ with tab1:
             "Semua Saham", "STRONG BUY (Semua)", "STRONG BUY (BOW)", "STRONG BUY (MOMENTUM)", "BUY (SWING TRADING)", "SELL / TAKE PROFIT"
         ])
     with f_col2:
-        min_rs = st.slider("Minimal RS Rating (Kekuatan vs IHSG):", 1, 99, 40)
+        min_rs = st.slider("Minimal RS Rating (Kekuatan vs IHSG):", 1, 99, 30)
     with f_col3:
         kondisi_harga = st.selectbox("Kondisi Harga Hari Ini:", ["Semua Kondisi", "Saham Merah (Koreksi)", "Saham Hijau (Naik)"])
 
