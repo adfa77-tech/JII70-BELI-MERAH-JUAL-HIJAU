@@ -122,22 +122,20 @@ def get_wib_time():
     hari = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"][now.weekday()]
     return f"{hari}, {now.strftime('%d-%m-%Y | %H:%M:%S')} WIB"
 
-# --- MESIN ANALISIS REAL-TIME DENGAN RUMUS AKURAT ---
-@st.cache_data(ttl=120)
+# --- KONEKSI YFINANCE & ANALISIS (VERSI PERTAMA YANG AKURAT) ---
+@st.cache_data(ttl=300)
 def fetch_and_analyze_market(tickers):
     try:
-        ihsg_obj = yf.Ticker("^JKSE")
-        ihsg_hist = ihsg_obj.history(period="6m", interval="1d")
-        if isinstance(ihsg_hist.columns, pd.MultiIndex):
-            ihsg_hist.columns = ihsg_hist.columns.get_level_values(0)
-        
-        ihsg_last = float(ihsg_hist['Close'].iloc[-1])
-        ihsg_prev = float(ihsg_hist['Close'].iloc[-2]) if len(ihsg_hist) > 1 else ihsg_last
-        ihsg_ret = (ihsg_last / float(ihsg_hist['Close'].iloc[0]) - 1) * 100 if len(ihsg_hist) >= 20 else 0
+        ihsg = yf.download("^JKSE", period="6m", interval="1d", progress=False)
+        if isinstance(ihsg.columns, pd.MultiIndex):
+            ihsg.columns = ihsg.columns.get_level_values(0)
+        ihsg_last = float(ihsg['Close'].iloc[-1])
+        ihsg_prev = float(ihsg['Close'].iloc[-2]) if len(ihsg) > 1 else ihsg_last
+        ihsg_ret = (ihsg_last / float(ihsg['Close'].iloc[0]) - 1) * 100 if len(ihsg) >= 20 else 0
     except Exception:
-        ihsg_hist = pd.DataFrame({'Close': [7300, 7300]})
-        ihsg_last = 7300.0
-        ihsg_prev = 7300.0
+        ihsg = pd.DataFrame({'Close': [7000, 7000]})
+        ihsg_last = 7000.0
+        ihsg_prev = 7000.0
         ihsg_ret = 0
 
     results = []
@@ -179,38 +177,33 @@ def fetch_and_analyze_market(tickers):
             support_20 = float(low.tail(20).min())
             resist_20 = float(high.tail(20).max())
 
-            # --- RUMUS FILTER STRATEGI DISIPLIN ---
+            # --- STRATEGI DISIPLIN ---
             sinyal = "WAIT / PANTAU"
             strategi = "Konsolidasi Sehat"
             alasan = []
             waktu_eksekusi = "Pantau saat pembukaan atau sesi sore"
 
-            # 1. Buy on Weakness (BOW)
             if chg_pct < 0 and curr_price >= (ma50 * 0.93) and rs_score >= 40:
                 sinyal = "STRONG BUY (BOW)"
                 strategi = "Buy on Weakness (Diskon di Dekat Support)"
                 alasan.append(f"Harga terkoreksi {chg_pct:.2f}% namun bertahan di area support MA50.")
                 alasan.append(f"RS Rating solid di angka {rs_score}.")
                 waktu_eksekusi = "Sesi 2 (14:30 - 15:50 WIB) saat harga melandai"
-            # 2. Momentum Breakout
             elif chg_pct > 1.0 and vol_ratio > 1.2 and curr_price > ma20:
                 sinyal = "STRONG BUY (MOMENTUM)"
                 strategi = "Breakout Volume Tinggi"
                 alasan.append(f"Kenaikan harga {chg_pct:.2f}% didukung lonjakan volume (Ratio: {vol_ratio:.2f}x).")
                 waktu_eksekusi = "Sesi 1 (09:30 - 11:00 WIB)"
-            # 3. Daytrade Scalping
             elif chg_pct > 0.3 and vol_ratio > 1.05 and rsi < 75:
                 sinyal = "BUY (DAYTRADE)"
                 strategi = "Scalping Intraday Cepat"
                 alasan.append("Volatilitas dan volume mendukung untuk trading harian.")
                 waktu_eksekusi = "Sesi 1 / Awal Sesi 2"
-            # 4. Swing Trading
             elif rsi < 60 and curr_price >= ma20:
                 sinyal = "BUY (SWING TRADING)"
                 strategi = "Pantulan Sehat di atas MA20"
                 alasan.append("Harga di atas MA20 dengan RSI tidak jenuh beli.")
                 waktu_eksekusi = "Menjelang penutupan pasar"
-            # 5. Sell / Take Profit
             elif rsi > 80 or (curr_price < ma20 and chg_pct < -2.5):
                 sinyal = "SELL / TAKE PROFIT"
                 strategi = "Amankan Profit / Batasi Risiko"
@@ -249,9 +242,9 @@ def fetch_and_analyze_market(tickers):
             continue
 
     df_res = pd.DataFrame(results)
-    return df_res, ihsg_hist, ihsg_last, ihsg_prev
+    return df_res, ihsg, ihsg_last, ihsg_prev
 
-# --- FUNGSI GRAFIK CANDLESTICK 6 BULAN ---
+# --- FUNGSI GRAFIK CANDLESTICK 6 BULAN (LAYAR PENUH) ---
 def plot_candlestick_6m(ticker, title_name):
     df = yf.download(ticker, period="6m", interval="1d", progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -281,30 +274,14 @@ def plot_candlestick_6m(ticker, title_name):
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume'), row=2, col=1)
 
     fig.update_layout(
-        title=dict(text=f"Grafik Candlestick 6 Bulan: {title_name}", font=dict(size=15, color="#ffffff")),
+        title=dict(text=f"Grafik Candlestick 6 Bulan: {title_name}", font=dict(size=16, color="#ffffff")),
         xaxis_rangeslider_visible=False,
-        height=480,
+        height=600,
         paper_bgcolor='rgba(10, 25, 18, 0.9)',
         plot_bgcolor='rgba(10, 25, 18, 0.9)',
         font=dict(color="#ffffff"),
         margin=dict(l=10, r=10, t=40, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    return fig
-
-# --- MINI CHART IHSG ---
-def plot_mini_ihsg(ihsg_df):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=ihsg_df.index, y=ihsg_df['Close'],
-        mode='lines', line=dict(color='#facc15', width=2),
-        fill='tozeroy', fillcolor='rgba(250, 204, 21, 0.2)'
-    ))
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(visible=False), yaxis=dict(visible=False),
-        height=60, width=170,
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
     )
     return fig
 
@@ -325,7 +302,7 @@ def fetch_stock_news(query="saham syariah JII70 IHSG"):
     return articles
 
 # --- AMBIL DATA PASAR ---
-with st.spinner("Memindai 70 emiten JII70 real-time dari Yahoo Finance..."):
+with st.spinner("Memindai 70 emiten JII70 dari Yahoo Finance..."):
     df_screener, df_ihsg, ihsg_last, ihsg_prev = fetch_and_analyze_market(JII70_TICKERS)
 
 # --- HEADER UTAMA ---
@@ -334,32 +311,18 @@ chg_color = "#4ade80" if ihsg_chg >= 0 else "#f87171"
 chg_sign = "+" if ihsg_chg >= 0 else ""
 ihsg_str = f"{ihsg_last:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-col_h1, col_h2, col_h3 = st.columns([4, 2, 2])
-with col_h1:
-    st.markdown(f"""
-    <div class="header-box">
-        <div>
-            <h2 style="margin:0; font-weight:800; color:#ffffff !important;">📊 JII70 QUANTUM SCREENER PRO</h2>
-            <p style="margin:4px 0 0 0; font-size:0.85rem; color:#facc15 !important;">Real-Time Yahoo Finance • 70 Emiten Syariah JII70</p>
-        </div>
+st.markdown(f"""
+<div class="header-box">
+    <div>
+        <h2 style="margin:0; font-weight:800; color:#ffffff !important;">📊 JII70 QUANTUM SCREENER PRO</h2>
+        <p style="margin:4px 0 0 0; font-size:0.88rem; color:#facc15 !important;">Yahoo Finance Official Data • 70 Emiten Syariah JII70</p>
     </div>
-    """, unsafe_allow_html=True)
-
-with col_h2:
-    st.markdown(f"""
-    <div style="background: rgba(15, 35, 25, 0.9); padding: 10px 16px; border-radius: 14px; border: 1.5px solid #facc15; text-align: center;">
-        <p style="margin:0; font-size:0.72rem; color:#facc15; font-weight:700;">IHSG TERKINI</p>
-        <h3 style="margin:2px 0; font-size:1.2rem; color:#ffffff !important;">{ihsg_str}</h3>
-        <p style="margin:0; font-size:0.78rem; color:{chg_color}; font-weight:700;">{chg_sign}{ihsg_chg:.2f}%</p>
+    <div style="text-align: right;">
+        <p style="margin:0; font-size:0.75rem; color:#facc15; font-weight:700;">IHSG TERKINI</p>
+        <h3 style="margin:2px 0; font-size:1.3rem; color:#ffffff !important;">{ihsg_str} <span style="font-size:0.9rem; color:{chg_color};">({chg_sign}{ihsg_chg:.2f}%)</span></h3>
     </div>
-    """, unsafe_allow_html=True)
-
-with col_h3:
-    st.markdown('<div style="background: rgba(15, 35, 25, 0.9); padding: 4px 10px; border-radius: 14px; border: 1.5px solid #4ade80; display: flex; justify-content: center; align-items: center;">', unsafe_allow_html=True)
-    st.plotly_chart(plot_mini_ihsg(df_ihsg), use_container_width=True, config={'displayModeBar': False})
-    st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown("<div style='margin-top: 8px;'></div>", unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
 col_ref1, col_ref2 = st.columns([1, 5])
 with col_ref1:
@@ -370,7 +333,7 @@ with col_ref1:
 # --- NAVIGASI TAB ---
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🔍 Screener & Sinyal",
-    "🕯️ Chart 6 Bulan (Saham & IHSG)",
+    "🕯️ Chart Candlestick 6 Bulan",
     "🏢 Profil Perusahaan",
     "⭐ Watchlist Pilihan",
     "🧮 Kalkulator Trading",
@@ -483,19 +446,13 @@ with tab1:
                 st.warning(f"{pilih_detail} sudah ada di Watchlist.")
 
 # ==============================================================================
-# TAB 2: CHART CANDLESTICK 6 BULAN
+# TAB 2: CHART CANDLESTICK 6 BULAN (LAYAR PENUH)
 # ==============================================================================
 with tab2:
-    col_ch1, col_ch2 = st.columns(2)
-    with col_ch1:
-        saham_chart = st.selectbox("Pilih Saham:", JII70_RAW, index=0)
-        fig_saham = plot_candlestick_6m(f"{saham_chart}.JK", f"Saham {saham_chart}")
-        st.plotly_chart(fig_saham, use_container_width=True)
-
-    with col_ch2:
-        st.markdown("<div style='height: 42px;'></div>", unsafe_allow_html=True)
-        fig_ihsg = plot_candlestick_6m("^JKSE", "Indeks Harga Saham Gabungan (IHSG)")
-        st.plotly_chart(fig_ihsg, use_container_width=True)
+    st.markdown("### 🕯️ Grafik Candlestick & Indikator Teknikal (6 Bulan)")
+    saham_chart = st.selectbox("Pilih Emiten untuk Dilihat Chart-nya:", JII70_RAW, index=0)
+    fig_saham = plot_candlestick_6m(f"{saham_chart}.JK", f"Saham {saham_chart}")
+    st.plotly_chart(fig_saham, use_container_width=True)
 
 # ==============================================================================
 # TAB 3: PROFIL PERUSAHAAN
@@ -561,7 +518,7 @@ with tab4:
             st.divider()
 
 # ==============================================================================
-# TAB 5: KALKULATOR TRADING SAHAM (DENGAN HASIL & PROFIT JELAS)
+# TAB 5: KALKULATOR TRADING SAHAM
 # ==============================================================================
 with tab5:
     st.markdown("### 🧮 Kalkulator Profit & Fee Transaksi Saham")
@@ -626,3 +583,4 @@ with tab6:
                 </p>
             </div>
             """, unsafe_allow_html=True)
+    
