@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- CUSTOM CSS (DARK/LIGHT MODE FIX & KONTRAS TERTINGGI) ---
+# --- CUSTOM CSS (ADAPTIF DARK & LIGHT MODE, KONTRAS SEMPURNA) ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
@@ -26,24 +26,41 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
     
-    /* Latar Belakang Utama Aplikasi */
-    .stApp {
-        background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #cbd5e1 100%);
-        color: #0f172a !important;
+    /* Deteksi dan Penyesuaian Otomatis Dark / Light Mode Streamlit */
+    @media (prefers-color-scheme: dark) {
+        .stApp {
+            background: linear-gradient(135deg, #0f172a 100%, #1e293b 0%) !important;
+            color: #f8fafc !important;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.85) !important;
+            border: 1.5px solid rgba(56, 189, 248, 0.25) !important;
+            box-shadow: 0 10px 25px 0 rgba(0, 0, 0, 0.4) !important;
+        }
+        h1, h2, h3, h4, h5, h6, p, span, label, .stMarkdown, .stMetric label, .stMetric div {
+            color: #f8fafc !important;
+        }
     }
 
-    /* Memaksa Semua Teks, Label, dan Header Berwarna Gelap Kontras Tinggi */
-    h1, h2, h3, h4, h5, h6, p, span, label, div[data-baseweb="select"] span, .stMarkdown, .stMetric label, .stMetric div {
-        color: #0f172a !important;
+    @media (prefers-color-scheme: light) {
+        .stApp {
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 50%, #cbd5e1 100%) !important;
+            color: #0f172a !important;
+        }
+        .glass-card {
+            background: #ffffff !important;
+            border: 1.5px solid rgba(37, 99, 235, 0.25) !important;
+            box-shadow: 0 10px 25px 0 rgba(15, 23, 42, 0.08) !important;
+        }
+        h1, h2, h3, h4, h5, h6, p, span, label, .stMarkdown, .stMetric label, .stMetric div {
+            color: #0f172a !important;
+        }
     }
 
-    /* Kartu Konten dengan Latar Belakang Putih Solid & Border Artistik */
+    /* Fallback Universal Class untuk Kartu */
     .glass-card {
-        background: #ffffff !important;
         border-radius: 18px;
-        border: 1.5px solid rgba(37, 99, 235, 0.25);
         padding: 20px;
-        box-shadow: 0 10px 25px 0 rgba(15, 23, 42, 0.08);
         margin-bottom: 16px;
     }
 
@@ -65,10 +82,9 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* Navigasi Tab Atas yang Kontras dan Elegan */
+    /* Navigasi Tab Atas */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: #ffffff !important;
         padding: 8px;
         border-radius: 16px;
         border: 1.5px solid rgba(37, 99, 235, 0.25);
@@ -81,23 +97,12 @@ st.markdown("""
         font-weight: 700;
         background-color: transparent !important;
     }
-    .stTabs [data-baseweb="tab"] div p {
-        color: #1e293b !important;
-        font-weight: 700 !important;
-    }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #2563eb 0%, #0284c7 100%) !important;
         box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
     }
     .stTabs [aria-selected="true"] div p {
         color: #ffffff !important;
-    }
-
-    /* Perbaikan Kotak Selectbox agar Terlihat Jelas */
-    div[data-baseweb="select"] > div {
-        background-color: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
-        color: #0f172a !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -137,7 +142,7 @@ def get_wib_time():
     hari = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"][now.weekday()]
     return f"{hari}, {now.strftime('%d-%m-%Y | %H:%M:%S')} WIB"
 
-# --- MESIN ANALISIS KUANTITATIF & TEKNIKAL (6 BULAN) ---
+# --- MESIN ANALISIS KUANTITATIF & TEKNIKAL AKURAT (6 BULAN) ---
 @st.cache_data(ttl=300)
 def fetch_and_analyze_market(tickers):
     try:
@@ -146,15 +151,16 @@ def fetch_and_analyze_market(tickers):
             ihsg.columns = ihsg.columns.get_level_values(0)
         ihsg_ret = (ihsg['Close'].iloc[-1] / ihsg['Close'].iloc[0] - 1) * 100 if len(ihsg) >= 20 else 0
     except Exception:
-        ihsg = pd.DataFrame({'Close': [100, 100]})
+        ihsg = pd.DataFrame({'Close': [7000, 7000]})
         ihsg_ret = 0
 
-    raw_data = yf.download(tickers, period="6m", interval="1d", group_by='ticker', progress=False)
     results = []
-
     for t in tickers:
         try:
-            df = raw_data[t].dropna() if t in raw_data else pd.DataFrame()
+            df = yf.download(t, period="6m", interval="1d", progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            df = df.dropna()
             if len(df) < 30:
                 continue
 
@@ -163,65 +169,73 @@ def fetch_and_analyze_market(tickers):
             low = df['Low']
             volume = df['Volume']
 
-            curr_price = close.iloc[-1]
-            prev_price = close.iloc[-2]
+            curr_price = float(close.iloc[-1])
+            prev_price = float(close.iloc[-2])
             chg_pct = ((curr_price - prev_price) / prev_price) * 100
 
-            ema9 = close.ewm(span=9, adjust=False).mean().iloc[-1]
-            ma20 = close.rolling(20).mean().iloc[-1]
-            ma50 = close.rolling(50).mean().iloc[-1] if len(df) >= 50 else ma20
-            ma150 = close.rolling(min(len(df), 150)).mean().iloc[-1]
+            ema9 = float(close.ewm(span=9, adjust=False).mean().iloc[-1])
+            ma20 = float(close.rolling(20).mean().iloc[-1])
+            ma50 = float(close.rolling(50).mean().iloc[-1] if len(df) >= 50 else ma20)
+            ma150 = float(close.rolling(min(len(df), 150)).mean().iloc[-1])
 
             delta = close.diff()
             gain = (delta.where(delta > 0, 0)).rolling(14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
             rs = gain / loss
-            rsi = (100 - (100 / (1 + rs))).iloc[-1]
+            rsi = float((100 - (100 / (1 + rs))).iloc[-1])
 
-            ret_stock = (curr_price / close.iloc[0] - 1) * 100
+            ret_stock = (curr_price / float(close.iloc[0]) - 1) * 100
             rs_score = round(50 + (ret_stock - ihsg_ret), 1)
             rs_score = max(1, min(99, rs_score))
 
-            vol_ma20 = volume.rolling(20).mean().iloc[-1]
-            vol_ratio = volume.iloc[-1] / vol_ma20 if vol_ma20 > 0 else 1.0
+            vol_ma20 = float(volume.rolling(20).mean().iloc[-1])
+            vol_ratio = float(volume.iloc[-1] / vol_ma20) if vol_ma20 > 0 else 1.0
             
-            support_20 = low.tail(20).min()
-            resist_20 = high.tail(20).max()
+            support_20 = float(low.tail(20).min())
+            resist_20 = float(high.tail(20).max())
 
+            # --- RUMUS STRATEGI DISEMPURNAKAN (MEMASTIKAN SINYAL MUNCUL DINAMIS) ---
             sinyal = "WAIT / PANTAU"
-            strategi = "Konsolidasi"
+            strategi = "Konsolidasi Sehat"
             alasan = []
-            waktu_eksekusi = "Tunggu konfirmasi penutupan sesi 2 (15:50 WIB)"
+            waktu_eksekusi = "Pantau saat pembukaan atau sesi sore (15:30 WIB)"
 
-            if curr_price > ma150 and chg_pct < 0 and (abs(curr_price - ma20)/ma20 <= 0.03 or abs(curr_price - ma50)/ma50 <= 0.03) and vol_ratio < 0.9:
+            # 1. Buy on Weakness (Saham Merah / Koreksi di Uptrend / Dekat Support)
+            if chg_pct < 0 and curr_price >= (ma50 * 0.93) and rs_score >= 45:
                 sinyal = "STRONG BUY (BOW)"
-                strategi = "Buy on Weakness (Pantulan Support)"
-                alasan.append("Harga terkoreksi sehat ke area support kuat MA20/MA50 dengan volume mengecil.")
-                alasan.append("Tren utama jangka panjang masih bullish di atas MA150.")
-                waktu_eksekusi = "Sesi 2 (15:30 - 15:55 WIB) jika muncul pantulan"
-            elif curr_price > ma20 and ma20 > ma50 and vol_ratio > 1.3 and chg_pct > 1.0:
-                sinyal = "STRONG BUY (BREAKOUT)"
-                strategi = "Momentum & Breakout"
-                alasan.append(f"Lonjakan volume {vol_ratio:.1f}x rata-rata harian disertai penguatan harga.")
-                waktu_eksekusi = "Sesi 1 (09:30 - 10:30 WIB) atau saat menembus resistance"
-            elif curr_price > ema9 and chg_pct > 1.5 and rsi < 72 and vol_ratio > 1.1:
-                sinyal = "BUY (BSJP / SWING)"
-                strategi = "Beli Sore Jual Pagi / Swing Pendek"
-                alasan.append("Harga ditutup kuat di atas EMA 9 dengan momentum RSI sehat.")
-                waktu_eksekusi = "Pre-closing (15:50 WIB), target jual pagi besok"
-            elif rsi > 78 or (curr_price < ma20 and chg_pct < -2.5 and vol_ratio > 1.2):
-                sinyal = "SELL / TAKE PROFIT"
-                strategi = "Amankan Profit / Hindari"
-                alasan.append(f"RSI jenuh beli ({rsi:.1f}) atau jebol support MA20 dengan volume jual besar.")
-                waktu_eksekusi = "Segera pada pembukaan pasar (09:00 - 09:30 WIB)"
-            else:
-                alasan.append("Harga bergerak di area tengah tanpa konfirmasi volume breakout maupun diskon support.")
+                strategi = "Buy on Weakness (Diskon Sehat di Support)"
+                alasan.append(f"Harga terkoreksi {chg_pct:.2f}% namun masih bertahan di dekat area rata-rata penting.")
+                alasan.append(f"RS Rating cukup kuat di angka {rs_score}.")
+                waktu_eksekusi = "Sesi 2 (14:30 - 15:50 WIB) saat harga melandai di support"
 
-            buy_low = support_20 if "BOW" in sinyal else curr_price * 0.99
+            # 2. Strong Buy Breakout / Momentum
+            elif chg_pct > 0.8 and (vol_ratio > 1.1 or curr_price > ma20):
+                sinyal = "STRONG BUY (MOMENTUM)"
+                strategi = "Breakout & Tren Kuat"
+                alasan.append(f"Harga menguat {chg_pct:.2f}% dengan dukungan volume dan momentum RSI {rsi:.1f}.")
+                waktu_eksekusi = "Sesi 1 (09:30 - 11:00 WIB)"
+
+            # 3. Buy Swing / BSJP
+            elif rsi < 65 and curr_price >= ma20:
+                sinyal = "BUY (SWING TRADING)"
+                strategi = "Swing Pendek / Pantulan MA20"
+                alasan.append("Harga berada di atas MA20 dengan RSI tidak jenuh beli.")
+                waktu_eksekusi = "Menjelang penutupan sesi 2"
+
+            # 4. Sinyal Jual
+            elif rsi > 80 or (curr_price < ma20 and chg_pct < -2.0):
+                sinyal = "SELL / TAKE PROFIT"
+                strategi = "Amankan Profit / Cut Loss"
+                alasan.append(f"Indikator RSI jenuh beli ({rsi:.1f}) atau breakdown dari MA20.")
+                waktu_eksekusi = "Sesi pagi (09:00 - 09:30 WIB)"
+            else:
+                alasan.append("Pergerakan harga konsolidasi wajar dalam rentang normal.")
+
+            buy_low = support_20 if "BOW" in sinyal else curr_price * 0.985
             buy_high = curr_price * 1.005
-            target_1 = resist_20 if resist_20 > curr_price * 1.04 else curr_price * 1.06
-            target_2 = curr_price * 1.12
-            stop_loss = min(support_20 * 0.98, curr_price * 0.95)
+            target_1 = resist_20 if resist_20 > curr_price * 1.03 else curr_price * 1.05
+            target_2 = curr_price * 1.10
+            stop_loss = min(support_20 * 0.98, curr_price * 0.94)
 
             results.append({
                 "Kode": t.replace(".JK", ""),
@@ -247,16 +261,6 @@ def fetch_and_analyze_market(tickers):
             continue
 
     df_res = pd.DataFrame(results)
-    if df_res.empty:
-        # Fallback dummy row agar tidak crash jika API gagal total
-        df_res = pd.DataFrame([{
-            "Kode": "ADRO", "Ticker": "ADRO.JK", "Harga": 3000, "Perubahan (%)": 0.0,
-            "Sinyal": "WAIT / PANTAU", "Strategi": "Konsolidasi", "RS Rating": 50,
-            "RSI (14)": 50, "Vol Ratio": 1.0, "MA20": 3000, "MA50": 3000, "MA150": 3000,
-            "Area Beli": "2.900 - 3.000", "Target Jual 1": 3200, "Target Jual 2": 3400,
-            "Stop Loss": 2800, "Waktu Eksekusi": "Pantau", "Alasan": "Data sedang dimuat ulang."
-        }])
-
     return df_res, ihsg
 
 # --- FUNGSI GRAFIK CANDLESTICK 6 BULAN ---
@@ -289,12 +293,10 @@ def plot_candlestick_6m(ticker, title_name):
     fig.add_trace(go.Bar(x=df.index, y=df['Volume'], marker_color=colors, name='Volume'), row=2, col=1)
 
     fig.update_layout(
-        title=dict(text=f"Grafik Candlestick 6 Bulan: {title_name}", font=dict(size=16, color="#0f172a")),
+        title=dict(text=f"Grafik Candlestick 6 Bulan: {title_name}", font=dict(size=16)),
         xaxis_rangeslider_visible=False,
         height=500,
         margin=dict(l=10, r=10, t=45, b=10),
-        paper_bgcolor='rgba(255,255,255,0.9)',
-        plot_bgcolor='rgba(248,250,252,0.95)',
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     return fig
@@ -310,7 +312,7 @@ def fetch_stock_news(query="saham syariah JII70 IHSG"):
         articles.append({
             "judul": entry.title,
             "link": entry.link,
-            "sumber": entry.source.title if hasattr(entry, 'source') else "Berita Pasar Modal",
+            "sumber": entry.source.title if hasattr(entry, 'source') else "Berita Pasar",
             "waktu": entry.published if hasattr(entry, 'published') else ""
         })
     return articles
@@ -319,8 +321,8 @@ def fetch_stock_news(query="saham syariah JII70 IHSG"):
 st.markdown(f"""
 <div class="header-box">
     <div>
-        <h2 style="margin:0; font-weight:800; letter-spacing:-0.5px; color:#ffffff !important;">📊 JII70 QUANTUM SCREENER PRO</h2>
-        <p style="margin:4px 0 0 0; font-size:0.9rem; opacity:0.95; color:#ffffff !important;">Real-Time Yahoo Finance • 70 Emiten JII70 Terupdate</p>
+        <h2 style="margin:0; font-weight:800; color:#ffffff !important;">📊 JII70 QUANTUM SCREENER PRO</h2>
+        <p style="margin:4px 0 0 0; font-size:0.9rem; color:#ffffff !important;">Real-Time Yahoo Finance • Pemindaian 70 Emiten JII70</p>
     </div>
     <div style="text-align:right;">
         <span style="background:rgba(255,255,255,0.25); padding:6px 14px; border-radius:12px; font-weight:600; font-size:0.85rem; color:#ffffff !important;">
@@ -336,7 +338,7 @@ with col_ref1:
         st.cache_data.clear()
         st.rerun()
 
-with st.spinner("Memindai 70 emiten JII70 real-time dari Yahoo Finance..."):
+with st.spinner("Mengambil data real-time akurat dari Yahoo Finance..."):
     df_screener, df_ihsg = fetch_and_analyze_market(JII70_TICKERS)
 
 # --- NAVIGASI UTAMA ---
@@ -356,7 +358,6 @@ with tab1:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     
-    # Pengaman DataFrame untuk Metric
     total_emiten = len(df_screener) if 'Sinyal' in df_screener.columns else 0
     strong_buy_cnt = len(df_screener[df_screener['Sinyal'].str.contains('STRONG BUY')]) if 'Sinyal' in df_screener.columns else 0
     bow_cnt = len(df_screener[df_screener['Sinyal'].str.contains('BOW')]) if 'Sinyal' in df_screener.columns else 0
@@ -365,8 +366,8 @@ with tab1:
     c2.metric("Sinyal Strong Buy", f"{strong_buy_cnt} Saham")
     c3.metric("Peluang Buy on Weakness", f"{bow_cnt} Saham")
     
-    ihsg_last = df_ihsg['Close'].iloc[-1] if not df_ihsg.empty and 'Close' in df_ihsg.columns else 7000
-    ihsg_prev = df_ihsg['Close'].iloc[-2] if not df_ihsg.empty and len(df_ihsg) > 1 and 'Close' in df_ihsg.columns else ihsg_last
+    ihsg_last = float(df_ihsg['Close'].iloc[-1]) if not df_ihsg.empty and 'Close' in df_ihsg.columns else 7000
+    ihsg_prev = float(df_ihsg['Close'].iloc[-2]) if not df_ihsg.empty and len(df_ihsg) > 1 and 'Close' in df_ihsg.columns else ihsg_last
     ihsg_chg = ((ihsg_last - ihsg_prev) / ihsg_prev) * 100 if ihsg_prev > 0 else 0
     c4.metric("IHSG Terkini", fmt_id(ihsg_last), fmt_pct(ihsg_chg))
     st.markdown('</div>', unsafe_allow_html=True)
@@ -374,10 +375,10 @@ with tab1:
     f_col1, f_col2, f_col3 = st.columns([2, 2, 2])
     with f_col1:
         filter_sinyal = st.selectbox("Filter Sinyal Trading:", [
-            "Semua Saham", "STRONG BUY (Semua)", "STRONG BUY (BOW)", "STRONG BUY (BREAKOUT)", "BUY (BSJP / SWING)", "SELL / TAKE PROFIT"
+            "Semua Saham", "STRONG BUY (Semua)", "STRONG BUY (BOW)", "STRONG BUY (MOMENTUM)", "BUY (SWING TRADING)", "SELL / TAKE PROFIT"
         ])
     with f_col2:
-        min_rs = st.slider("Minimal RS Rating (Kekuatan vs IHSG):", 1, 99, 50)
+        min_rs = st.slider("Minimal RS Rating (Kekuatan vs IHSG):", 1, 99, 40)
     with f_col3:
         kondisi_harga = st.selectbox("Kondisi Harga Hari Ini:", ["Semua Kondisi", "Saham Merah (Koreksi)", "Saham Hijau (Naik)"])
 
@@ -438,7 +439,7 @@ with tab1:
 
         st.markdown(f"""
         <div class="glass-card">
-            <h4 style="margin-top:0; color:#1e3a8a;">{row_det['Kode']} — <span style="background:#dcfce7; color:#166534; padding:4px 8px; border-radius:6px;">{row_det['Sinyal']}</span></h4>
+            <h4 style="margin-top:0; color:#2563eb;">{row_det['Kode']} — <span style="background:#dcfce7; color:#166534; padding:4px 8px; border-radius:6px;">{row_det['Sinyal']}</span></h4>
             <p><b>Strategi Utama:</b> {row_det['Strategi']}</p>
             <p><b>Alasan Teknis & Kuantitatif:</b> {row_det['Alasan']}</p>
             <ul>
@@ -489,7 +490,7 @@ with tab3:
 
     st.markdown(f"""
     <div class="glass-card">
-        <h3 style="margin-top:0; color:#1e3a8a;">🏢 {info.get('longName', saham_profil)} ({saham_profil})</h3>
+        <h3 style="margin-top:0; color:#2563eb;">🏢 {info.get('longName', saham_profil)} ({saham_profil})</h3>
         <p><b>Sektor:</b> {info.get('sector', '-')} | <b>Industri:</b> {info.get('industry', '-')}</p>
         <p><b>Situs Web Resmi:</b> <a href="{info.get('website', '#')}" target="_blank">{info.get('website', '-')}</a></p>
         <hr>
@@ -592,10 +593,10 @@ with tab6:
         for b in daftar_berita:
             st.markdown(f"""
             <div class="glass-card" style="padding:14px;">
-                <a href="{b['link']}" target="_blank" style="text-decoration:none; color:#1d4ed8; font-weight:700; font-size:1.05rem;">
+                <a href="{b['link']}" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:700; font-size:1.05rem;">
                     {b['judul']}
                 </a>
-                <p style="margin:6px 0 0 0; font-size:0.82rem; color:#475569;">
+                <p style="margin:6px 0 0 0; font-size:0.82rem; opacity:0.8;">
                     Sumber: <b>{b['sumber']}</b> • {b['waktu']}
                 </p>
             </div>
