@@ -26,7 +26,6 @@ st.markdown("""
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
     
-    /* Deteksi dan Penyesuaian Otomatis Dark / Light Mode Streamlit */
     @media (prefers-color-scheme: dark) {
         .stApp {
             background: linear-gradient(135deg, #0f172a 100%, #1e293b 0%) !important;
@@ -338,6 +337,7 @@ with st.spinner("Memindai 70 emiten JII70 real-time dari Yahoo Finance..."):
 ihsg_chg = ((ihsg_last - ihsg_prev) / ihsg_prev) * 100 if ihsg_prev > 0 else 0
 chg_color = "#4ade80" if ihsg_chg >= 0 else "#f87171"
 chg_sign = "+" if ihsg_chg >= 0 else ""
+ihsg_str = f"{ihsg_last:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 col_h1, col_h2, col_h3 = st.columns([4, 2, 2])
 with col_h1:
@@ -352,7 +352,7 @@ with col_h2:
     st.markdown(f"""
     <div style="background: rgba(30, 41, 59, 0.7); padding: 12px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.2); text-align: center;">
         <p style="margin:0; font-size:0.75rem; color:#94a3b8; font-weight:600;">IHSG TERKINI</p>
-        <h3 style="margin:2px 0; font-size:1.25rem; color:#ffffff !important;">{ihsg_last:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')</h3>
+        <h3 style="margin:2px 0; font-size:1.25rem; color:#ffffff !important;">{ihsg_str}</h3>
         <p style="margin:0; font-size:0.8rem; color:{chg_color}; font-weight:700;">{chg_sign}{ihsg_chg:.2f}%</p>
     </div>
     """, unsafe_allow_html=True)
