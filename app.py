@@ -138,7 +138,7 @@ def get_wib_time():
     hari = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"][now.weekday()]
     return f"{hari}, {now.strftime('%d-%m-%Y | %H:%M:%S')} WIB"
 
-# --- MESIN ANALISIS REAL-TIME ---
+# --- MESIN ANALISIS REAL-TIME DENGAN KONEKSI YFINANCE & RUMUS STRATEGI LENGKAP ---
 @st.cache_data(ttl=120)
 def fetch_and_analyze_market(tickers):
     try:
@@ -197,7 +197,7 @@ def fetch_and_analyze_market(tickers):
             support_20 = float(low.tail(20).min())
             resist_20 = float(high.tail(20).max())
 
-            # --- RUMUS STRATEGI ---
+            # --- RUMUS STRATEGI LENGKAP & DINAMIS ---
             sinyal = "WAIT / PANTAU"
             strategi = "Konsolidasi Sehat"
             alasan = []
@@ -586,43 +586,3 @@ with tab5:
     nilai_beli_kotor = harga_beli * total_lembar
     biaya_fee_beli = nilai_beli_kotor * (fee_beli_pct / 100)
     total_modal_keluar = nilai_beli_kotor + biaya_fee_beli
-
-    nilai_jual_kotor = harga_jual * total_lembar
-    biaya_fee_jual = nilai_jual_kotor * (fee_jual_pct / 100)
-    total_dana_diterima = nilai_jual_kotor - biaya_fee_jual
-
-    profit_bersih = total_dana_diterima - total_modal_keluar
-    roi_bersih = (profit_bersih / total_modal_keluar) * 100 if total_modal_keluar > 0 else 0
-    total_fee = biaya_fee_beli + biaya_fee_jual
-
-    st.divider()
-    st.markdown(f"**Simulasi Perhitungan untuk Saham: {nama_saham_manual.upper()}** ({jumlah_lot} Lot / {total_lembar} Lembar)")
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Total Modal Beli", fmt_id(total_modal_keluar, "Rp "))
-    r2.metric("Total Hasil Jual", fmt_id(total_dana_diterima, "Rp "))
-    r3.metric("Total Fee", fmt_id(total_fee, "Rp "))
-    r4.metric("Profit Bersih", fmt_id(profit_bersih, "Rp "), fmt_pct(roi_bersih))
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ==============================================================================
-# TAB 6: BERITA TERKINI
-# ==============================================================================
-with tab6:
-    st.markdown("### 📰 Berita Pasar Modal & Emiten Terkini")
-    topik_berita = st.text_input("Cari Berita Emiten:", value="saham syariah IHSG")
-    daftar_berita = fetch_stock_news(topik_berita)
-
-    if not daftar_berita:
-        st.warning("Belum ada berita terbaru.")
-    else:
-        for b in daftar_berita:
-            st.markdown(f"""
-            <div class="glass-card" style="padding:14px;">
-                <a href="{b['link']}" target="_blank" style="text-decoration:none; color:#2563eb; font-weight:700; font-size:1.05rem;">
-                    {b['judul']}
-                </a>
-                <p style="margin:6px 0 0 0; font-size:0.82rem; opacity:0.8;">
-                    Sumber: <b>{b['sumber']}</b> • {b['waktu']}
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
